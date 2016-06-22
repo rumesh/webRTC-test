@@ -14,6 +14,9 @@ function onMessage(ws, message){
         case "init":
             onInit(ws, message.init);
             break;
+        case "initHybrid":
+            onInitHybrid(ws, message.init);
+            break;
         default:
             throw new Error("invalid message type");
     }
@@ -22,7 +25,36 @@ function onMessage(ws, message){
 function onInit(ws, id){
     console.log("init from peer:", id);
     ws.id = id;
+    sendPeersList(ws, Object.keys(connectedPeers));
     connectedPeers[id] = ws;
+}
+
+function onInitHybrid(ws, id){
+    console.log("init from peer:", id);
+    ws.id = id;
+    sendRandomPeer(ws, Object.keys(connectedPeers));
+    connectedPeers[id] = ws;
+}
+
+function sendPeersList(destination, peers) {
+    destination.send(JSON.stringify({
+        type:'peerList',
+        peers: peers
+    }));
+}
+
+function sendRandomPeer(destination, peers) {
+    if (peers.length > 0) {
+        var random = Math.random();
+        console.log("random", random);
+        console.log("peers length", peers.length);
+        var randomIndex = Math.floor(random * peers.length);
+        console.log("randomIndex:", randomIndex);
+        destination.send(JSON.stringify({
+            type:'firstPeer',
+            peer: peers[randomIndex]
+        }));
+    }
 }
 
 function onOffer(offer, destination, source){
