@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Message page</title>
+    <script src="signalingChannelFactory.js"></script>
+    <script src="message.js"></script>
+    <script language="javascript" type="text/javascript">
+        var CALLER_ID = Date.now() + "" + Math.ceil(Math.random() * 100);
+        window.selectedChannel = null;
+        window.addEventListener("load", function(){
+            var received = document.getElementById('received')
+            initMessage(function(message){
+                var newText = document.createElement('p');
+                newText.innerHTML = message;
+                received.appendChild(newText);
+            });
+            document.getElementById("send").onclick= function(){
+                var channel, message = document.getElementById('message').value;
+                if (selectedChannel && (channel = getCommChannel(selectedChannel))) {
+                    channel.send(message);
+                    document.getElementById('message').value = "";
+                } else {
+                    alert('select a peer before send a message');
+                }
+            };
+            document.getElementById("conectedPeers").addEventListener('change', function(event) {
+                selectedChannel = this.options[this.selectedIndex].value;
+            }, false);
+        }, false);
+    </script>
+</head>
+<body>
+    <h2>Message page</h2>
+    <textarea id="message"></textarea>
+    Connected Peers: <select id="conectedPeers" size="3"></select><br/>
+    <div id="received"></div>
+    <button id="send">Send message</button>
+</body>
+</html>

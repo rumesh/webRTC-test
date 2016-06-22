@@ -36,6 +36,12 @@ function SignalingChannel(id){
             case "answer":
                 self.onAnswer(objMessage.answer, objMessage.source);
                 break;
+            case "peerList":
+                self.onPeerList(objMessage.peers);
+                break;
+            case "firstPeer":
+                self.onFirstPeer(objMessage.peer);
+                break;
             default:
                 throw new Error("invalid message type");
         }
@@ -59,7 +65,7 @@ function SignalingChannel(id){
 
     function sendAnswer(answer, destination){
         _sendMessage("answer", answer, destination);
-        
+
     }
 
     this.connectToTracker = connectToTracker;
@@ -67,20 +73,28 @@ function SignalingChannel(id){
     this.sendOffer = sendOffer;
     this.sendAnswer = sendAnswer;
 
-    //default handler, should be overriden 
+    //default handler, should be overriden
     this.onOffer = function(offer, source){
         console.log("offer from peer:", source, ':', offer);
     };
 
-    //default handler, should be overriden 
+    //default handler, should be overriden
     this.onAnswer = function(answer, source){
         console.log("answer from peer:", source, ':', answer);
     };
 
-    //default handler, should be overriden 
+    //default handler, should be overriden
     this.onICECandidate = function(ICECandidate, source){
         console.log("ICECandidate from peer:", source, ':', ICECandidate);
     };
+
+    this.onPeerList = function(peers) {
+        console.log("peer list", peers);
+    }
+
+    this.onFirstPeer = function(peer) {
+        console.log("first peer receive", peer);
+    }
 }
 
 window.createSignalingChannel = function(url, id){
