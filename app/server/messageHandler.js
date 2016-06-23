@@ -12,9 +12,6 @@ function onMessage(ws, message){
             onAnswer(message.answer, message.destination, ws.id);
             break;
         case "init":
-            onInit(ws, message.init);
-            break;
-        case "initHybrid":
             onInitHybrid(ws, message.init);
             break;
         default:
