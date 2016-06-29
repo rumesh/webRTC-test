@@ -90,11 +90,11 @@ function SignalingChannel(id){
 
     this.onPeerList = function(peers) {
         console.log("peer list", peers);
-    }
+    };
 
     this.onFirstPeer = function(peer) {
-        console.log("first peer receive", peer);
-    }
+        console.log("first peer", peer);
+    };
 }
 
 window.createSignalingChannel = function(url, id){

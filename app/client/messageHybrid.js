@@ -58,7 +58,7 @@ function initMessage(messageCallback){
         } else if (PeersToConnect.length > 0) {
             var nextPeer = PeersToConnect.shift();
 
-            PeerConections[nextPeer] = startCommunicationViaPeer(FirstPeer, nextPeer);
+            PeerConections[nextPeer] = startCommunication(nextPeer, FirstPeer);
         }
     }
 
@@ -68,13 +68,13 @@ function initMessage(messageCallback){
             if (data.type) {
                 switch (data.type) {
                     case "ICECandidate":
-                        onICECandidate(data.ICECandidate, data.destination, data.source);
+                        onICECandidate(data.ICECandidate, data.destination, data.source, peer);
                         break;
                     case "offer":
-                        onOffer(data.offer, data.destination, peer);
+                        onOffer(data.offer, data.destination, data.source, peer);
                         break;
                     case "answer":
-                        onAnswer(data.answer, data.destination, peer);
+                        onAnswer(data.answer, data.destination, data.source);
                         break;
                     case 'request':
                         if (data.request === 'peerList') {
@@ -123,19 +123,20 @@ function initMessage(messageCallback){
         }
     }
 
-    function onOffer(offer, destination, source){
+    function onOffer(offer, destination, source, connectionSource) {
         if (destination === CALLER_ID) {
+            var peerConnection;
             if (PeerConections[source]) {
-                var peerConnection = PeerConections[source];
+                peerConnection = PeerConections[source];
             } else {
-                var peerConnection = createPeerConnection(source);
+                peerConnection = createPeerConnection(source, connectionSource);
                 addNewPeerToSelect(source);
                 PeerConections[source] = peerConnection;
             }
             peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             peerConnection.createAnswer(function(answer){
                 peerConnection.setLocalDescription(answer);
-                sendToPeer(source, {
+                sendToPeer(connectionSource, {
                     type: 'answer',
                     answer: answer,
                     source: destination,
@@ -154,29 +155,31 @@ function initMessage(messageCallback){
         }
     }
 
-    function onAnswer(answer, destination, source){
+    function onAnswer(answer, destination, source) {
         if (destination === CALLER_ID) {
             PeerConections[source].setRemoteDescription(new RTCSessionDescription(answer));
         } else {
             sendToPeer(destination, {
                 type: 'answer',
-                offer: answer,
+                answer: answer,
                 source: source,
                 destination: destination
             });
         }
     }
 
-    function onICECandidate(ICECandidate, destination, source){
+    function onICECandidate(ICECandidate, destination, source, connectionSource) {
         if (destination === CALLER_ID) {
+            var peerConnection;
             if (PeerConections[source]) {
-                var peerConnection = PeerConections[source];
+                peerConnection = PeerConections[source];
             } else {
-                var peerConnection = createPeerConnection(source);
+                peerConnection = createPeerConnection(source, connectionSource);
                 addNewPeerToSelect(source);
                 PeerConections[source] = peerConnection;
             }
             peerConnection.addIceCandidate(new RTCIceCandidate(ICECandidate));
+
         } else {
             sendToPeer(destination, {
                 type: 'ICECandidate',
@@ -187,7 +190,7 @@ function initMessage(messageCallback){
         }
     }
 
-    function startCommunication(peerId) {
+    function startCommunication(peerId, hostPeer) {
         var pc = new RTCPeerConnection(servers, {
             optional: [{
                 DtlsSrtpKeyAgreement: true
@@ -204,7 +207,16 @@ function initMessage(messageCallback){
 
         pc.onicecandidate = function (evt) {
             if(evt.candidate){ // empty candidate (wirth evt.candidate === null) are often generated
-                signalingChannel.sendICECandidate(evt.candidate, peerId);
+                if (hostPeer) {
+                    sendToPeer(hostPeer, {
+                        type: 'ICECandidate',
+                        ICECandidate: evt.candidate,
+                        source: CALLER_ID,
+                        destination: peerId
+                    });
+                } else {
+                    signalingChannel.sendICECandidate(evt.candidate, peerId);
+                }
             }
         };
 
@@ -215,67 +227,16 @@ function initMessage(messageCallback){
 
         pc.createOffer(function(offer){
             pc.setLocalDescription(offer);
-            signalingChannel.sendOffer(offer, peerId);
-        }, function (e){
-            console.error(e);
-        });
-
-        pc.commChannel = _commChannel;
-
-        _commChannel.onclose = function(evt) {
-            console.log("dataChannel closed");
-        };
-
-        _commChannel.onerror = function(evt) {
-            console.error("dataChannel error");
-        };
-
-        _commChannel.onopen = function(){
-            // check if need to connect to another peer
-            console.log("comm open");
-            connectToNextPeer();
-        };
-
-        _commChannel.onmessage = function(message) {
-            channelMessageHandler(message, peerId);
-        };
-
-        return pc;
-    }
-
-    function startCommunicationViaPeer(hostPeer, peerId) {
-        var pc = new RTCPeerConnection(servers, {
-            optional: [{
-                DtlsSrtpKeyAgreement: true
-            }]
-        });
-
-        pc.onicecandidate = function (evt) {
-            if(evt.candidate){ // empty candidate (wirth evt.candidate === null) are often generated
+            if (hostPeer) {
                 sendToPeer(hostPeer, {
-                    type: 'ICECandidate',
-                    ICECandidate: evt.candidate,
+                    type: 'offer',
+                    offer: offer,
                     source: CALLER_ID,
                     destination: peerId
                 });
-                // signalingChannel.sendICECandidate(evt.candidate, peerId);
-
+            } else {
+                signalingChannel.sendOffer(offer, peerId);
             }
-        };
-
-        //:warning the dataChannel must be opened BEFORE creating the offer.
-        var _commChannel = pc.createDataChannel('communication', {
-            reliable: false
-        });
-
-        pc.createOffer(function(offer) {
-            pc.setLocalDescription(offer);
-            sendToPeer(hostPeer, {
-                type: 'offer',
-                offer: offer,
-                source: CALLER_ID,
-                destination: peerId
-            });
         }, function (e){
             console.error(e);
         });
@@ -302,7 +263,7 @@ function initMessage(messageCallback){
         return pc;
     }
 
-    function createPeerConnection(peerId){
+    function createPeerConnection(peerId, connectionPeer){
         var pc = new RTCPeerConnection(servers, {
             optional: [{
                 DtlsSrtpKeyAgreement: true
@@ -311,13 +272,24 @@ function initMessage(messageCallback){
 
         pc.onicecandidate = function (evt) {
             if(evt.candidate){ // empty candidate (wirth evt.candidate === null) are often generated
-                signalingChannel.sendICECandidate(evt.candidate, peerId);
+                if (connectionPeer) {
+                    sendToPeer(connectionPeer, {
+                        type: 'ICECandidate',
+                        ICECandidate: evt.candidate,
+                        source: CALLER_ID,
+                        destination: peerId
+                    });
+                } else {
+                    signalingChannel.sendICECandidate(evt.candidate, peerId);
+                }
             }
         };
 
-        signalingChannel.onICECandidate = function (ICECandidate, source) {
-            pc.addIceCandidate(new RTCIceCandidate(ICECandidate));
-        };
+        if (!connectionPeer) {
+            signalingChannel.onICECandidate = function (ICECandidate, source) {
+                pc.addIceCandidate(new RTCIceCandidate(ICECandidate));
+            };
+        }
 
         pc.ondatachannel = function(event) {
           var receiveChannel = event.channel;
